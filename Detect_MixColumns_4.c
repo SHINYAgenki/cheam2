@@ -4,19 +4,19 @@
 
 #define COMB_SIZE 1080
 
-//鍵のペア(3)
+//鍵のペア(4)
 typedef struct 
 {
-    unsigned char key_2;
-    unsigned char key_7;
-    unsigned char key_8;
-    unsigned char key_13;
-} Combination_3;
+    unsigned char key_1;
+    unsigned char key_6;
+    unsigned char key_11;
+    unsigned char key_12;
+} Combination_4;
 
-Combination_3 Comb3[COMB_SIZE];
+Combination_4 Comb4[COMB_SIZE];
 int count=1;
 
-void Detect_MixColumns_3(unsigned char *src1, unsigned char *src2, unsigned char *key){
+void Detect_MixColumns_4(unsigned char *src1, unsigned char *src2, unsigned char *key){
 
     for (int i = 1; i < 16; i++)
     {
@@ -34,18 +34,18 @@ void Detect_MixColumns_3(unsigned char *src1, unsigned char *src2, unsigned char
                         (src1[1]==src2[1] && src1[2]==src2[2] && src1[3]==src2[3] && src1[0]!=src2[0]))
                     {
                         count += 1;
-                        Comb3[count].key_2 = key[2];
-                        Comb3[count].key_7 = key[7];
-                        Comb3[count].key_8 = key[8];
-                        Comb3[count].key_13 = key[13];
+                        Comb4[count].key_1 = key[1];
+                        Comb4[count].key_6 = key[6];
+                        Comb4[count].key_11 = key[11];
+                        Comb4[count].key_12 = key[12];
                     }
-                    key[13] += 0x01;
+                    key[12] += 0x01;
                 }
-                key[8] += 0x01;
+                key[11] += 0x01;
             }
-            key[7] += 0x01;
+            key[6] += 0x01;
         }
-        key[2] += 0x01;
+        key[1] += 0x01;
     }
     
 }
