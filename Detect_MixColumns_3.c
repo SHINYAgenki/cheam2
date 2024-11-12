@@ -10,7 +10,7 @@ typedef struct
     unsigned char key_2;
     unsigned char key_7;
     unsigned char key_8;
-    unsigned char key_12;
+    unsigned char key_13;
 } Combination_3;
 
 Combination_3 Comb3[COMB_SIZE];
@@ -37,9 +37,9 @@ void Detect_MixColumns_3(unsigned char *src1, unsigned char *src2, unsigned char
                         Comb3[count].key_2 = key[2];
                         Comb3[count].key_7 = key[7];
                         Comb3[count].key_8 = key[8];
-                        Comb3[count].key_12 = key[12];
+                        Comb3[count].key_13 = key[13];
                     }
-                    key[12] += 0x01;
+                    key[13] += 0x01;
                 }
                 key[8] += 0x01;
             }
