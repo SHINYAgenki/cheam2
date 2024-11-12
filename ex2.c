@@ -624,6 +624,11 @@ void Encrypt(unsigned char *dst, unsigned char *src, unsigned char *init_key) {
     KeyExpansion(w, key);          // キー拡張（KeyExpansion）
     memcpy(state, src, 16);        // 入力を状態 (state) にコピー
 
+    printf("Round 0 key:\n");
+        for (int i = 0; i < 16; i++) {
+            printf("%02x ", w[i]);
+        }
+    printf("\n");
     // 2. 初回の AddRoundKey
     AddRoundKey(state, state, w);
 
@@ -631,6 +636,11 @@ void Encrypt(unsigned char *dst, unsigned char *src, unsigned char *init_key) {
     for (int round = 1; round <= 9; round++) {
         SubBytes(state, state);                     // SubBytes
         ShiftRows(state, state);                    // ShiftRows
+        printf("Round %d key:\n", round);
+        for (int i = 0; i < 16; i++) {
+            printf("%02x ", w[round * 16 + i]);
+        }
+        printf("\n");
         AddRoundKey(state, state, w + (round * 16)); // ラウンドキーの適用
     }
 
