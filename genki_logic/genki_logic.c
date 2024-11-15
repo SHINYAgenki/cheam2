@@ -56,6 +56,9 @@ unsigned char PLAIN_TEXT[10][2][16] = {
     }
 };
 
+/*逆行列から求まる比*/
+const unsigned char RATIO_PATTERN[4] = {0x0e, 0x09, 0x0d, 0xb};
+
 // S-box look-up table この辺グローバル変数が長すぎてうざいから別ファイルにまとめたい
 const unsigned char g_sbox[256] = {
     0x63, 0x7c, 0x77, 0x7b, 0xf2, 0x6b, 0x6f, 0xc5,
@@ -142,63 +145,37 @@ void FirstEncrypt(unsigned char *dst, unsigned char *src, unsigned char *init_ke
     まぁ実行速度早いからいいんだけどね
 */
 
-int Ratio_Difference_1(unsigned char *pt1, unsigned char *pt2, int a, int b) {
+int Ratio_Difference(unsigned char *pt1, unsigned char *pt2, int row1, int row2, int mode) {
     unsigned char diff[16] = {0};
 
     for (int i = 0; i < 16; i++) {
-        diff[i] = pt1[i] ^ pt2[i];  
+        diff[i] = pt1[i] ^ pt2[i];
         //ちゃんと差分が指定のモデルの位置のみに0以外の値があるかをチェック
         // printf("%02X ", diff[i]);
     }
-    // printf("\n");
+        // printf("\n");
 
-    if( gmul( diff[a], 0x09 ) == gmul( diff[b], 0x0e ) || 
-        gmul( diff[a], 0x0e ) == gmul( diff[b], 0x0b ) || 
-        gmul( diff[a], 0x0b ) == gmul( diff[b], 0x0d ) || 
-        gmul( diff[a], 0x0d ) == gmul( diff[b], 0x09 ) ){
-        return 1;
+    switch (mode) {
+        case 1:
+            return (gmul(diff[row1], 0x09) == gmul(diff[row2], 0x0e) ||
+                    gmul(diff[row1], 0x0e) == gmul(diff[row2], 0x0b) ||
+                    gmul(diff[row1], 0x0b) == gmul(diff[row2], 0x0d) ||
+                    gmul(diff[row1], 0x0d) == gmul(diff[row2], 0x09));
+        case 2:
+            return (gmul(diff[row1], 0x0d) == gmul(diff[row2], 0x09) ||
+                    gmul(diff[row1], 0x09) == gmul(diff[row2], 0x0e) ||
+                    gmul(diff[row1], 0x0e) == gmul(diff[row2], 0x0b) ||
+                    gmul(diff[row1], 0x0b) == gmul(diff[row2], 0x0d));
+        case 3:
+            return (gmul(diff[row1], 0x0b) == gmul(diff[row2], 0x0d) ||
+                    gmul(diff[row1], 0x0d) == gmul(diff[row2], 0x09) ||
+                    gmul(diff[row1], 0x09) == gmul(diff[row2], 0x0e) ||
+                    gmul(diff[row1], 0x0e) == gmul(diff[row2], 0x0b));
+        default:
+            return 0; // モードが無効な場合は0を返す
     }
-    return 0;   
+    return 1;
 }
-
-int Ratio_Difference_2(unsigned char *pt1, unsigned char *pt2, int b, int c) {
-    unsigned char diff[16] = {0};
-
-    for (int i = 0; i < 16; i++) {
-        diff[i] = pt1[i] ^ pt2[i];  
-        //ちゃんと差分が指定のモデルの位置のみに0以外の値があるかをチェック
-        // printf("%02X ", diff[i]);
-    }
-    // printf("\n");
-
-    if( gmul( diff[b], 0x0d ) == gmul( diff[c], 0x09 ) || 
-        gmul( diff[b], 0x09 ) == gmul( diff[c], 0x0e ) || 
-        gmul( diff[b], 0x0e ) == gmul( diff[c], 0x0b ) || 
-        gmul( diff[b], 0x0b ) == gmul( diff[c], 0x0d ) ){
-        return 1;
-    }
-    return 0;   
-}
-
-int Ratio_Difference_3(unsigned char *pt1, unsigned char *pt2, int c, int d) {
-    unsigned char diff[16] = {0};
-
-    for (int i = 0; i < 16; i++) {
-        diff[i] = pt1[i] ^ pt2[i];  
-        //ちゃんと差分が指定のモデルの位置のみに0以外の値があるかをチェック
-        // printf("%02X ", diff[i]);
-    }
-    // printf("\n");
-
-    if( gmul( diff[c], 0x0b ) == gmul( diff[d], 0x0d ) || 
-        gmul( diff[c], 0x0d ) == gmul( diff[d], 0x09 ) || 
-        gmul( diff[c], 0x09 ) == gmul( diff[d], 0x0e ) || 
-        gmul( diff[c], 0x0e ) == gmul( diff[d], 0x0b ) ){
-        return 1;
-    }
-    return 0;   
-}
-
 
 
 //デバッグ用
@@ -306,7 +283,7 @@ int main() {
                 FirstEncrypt(p4, z, key);
 
 
-                if (Ratio_Difference_1(p1, p2, a, b) == 1 && Ratio_Difference_1(p3, p4, a, b) == 1) {
+                if (Ratio_Difference(p1, p2, a, b, 1) == 1 &&Ratio_Difference(p3, p4, a, b, 1) == 1) {
                     //鍵の中間報告
                     // printf("key_1: %02X key_2: %02X \n", (unsigned char)k_1, (unsigned char)k_2);
                     for (int k_3 = 0; k_3 < 256; k_3++) {
@@ -316,7 +293,7 @@ int main() {
                         FirstEncrypt(p3, w, key);
                         FirstEncrypt(p4, z, key);
 
-                        if (Ratio_Difference_2(p1, p2, b, c) == 1 && Ratio_Difference_2(p3, p4, b, c) == 1) {
+                        if (Ratio_Difference(p1, p2, b, c, 2) == 1 &&Ratio_Difference(p3, p4, b, c, 2) == 1) {
                             //鍵の中間報告
                             // printf("key_1: %02X key_2: %02X, key_3: %02X \n", (unsigned char)k_1, (unsigned char)k_2, (unsigned char)k_3);
 
@@ -327,7 +304,7 @@ int main() {
                                 FirstEncrypt(p3, w, key);
                                 FirstEncrypt(p4, z, key);
 
-                                if (Ratio_Difference_3(p1, p2, c, d) == 1 &&  Ratio_Difference_3(p3, p4, c, d) == 1) {
+                                if (Ratio_Difference(p1, p2, c, d, 3) == 1 && Ratio_Difference(p3, p4, c, d, 3) == 1) {
                                     //鍵の中間報告
                                     // printf("key_1: %02X key_2: %02X, key_3: %02X  key_4: %02X \n", (unsigned char)k_1, (unsigned char)k_2, (unsigned char)k_3, (unsigned char)k_4);
                                     mostPrimekey[a] = (unsigned char)k_1;
