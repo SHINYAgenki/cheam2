@@ -11,6 +11,25 @@
  * 0 0 0 x | x 0 0 0 | 0 x 0 0 | 0 0 x 0
  */
 
+
+/**
+ * @def MODE_1
+ * @brief Δ1 : Δ2 の計算モード
+ */
+
+/**
+ * @def MODE_2
+ * @brief Δ2 : Δ3 の計算モード
+ */
+
+/**
+ * @def MODE_3
+ * @brief Δ3 : Δ4 の計算モード
+ */
+#define MODE_1 1 
+#define MODE_2 2
+#define MODE_3 3
+
 /* ここからグローバル変数*/
 // 平文 mode1 ~ 4までの順 全部使わなくても良さそうで全てのモデルが検査できればおっけい
 unsigned char PLAIN_TEXT[10][2][16] = {
@@ -122,16 +141,14 @@ void SubBytes(unsigned char *dst, unsigned char *src) {
 }
 
 
-void FirstEncrypt(unsigned char *dst, unsigned char *src, unsigned char *init_key) {
-    unsigned char key[16];
-    unsigned char state[16]; //16bite
-    int i;
+void FirstEncrypt(unsigned char dst[4][16], unsigned char src[4][16], unsigned char *init_key) {
+    unsigned char state[4][16]; //16bite
 
-    //0ラウンドにぶち込む初期キー, 以降は鍵は使わない
-    AddRoundKey(state, src, init_key); 
+    for (int i = 0; i < 4; i++) {
+        AddRoundKey(state[i], src[i], init_key);
+        SubBytes(dst[i], state[i]);
+    }
 
-    //1ラウンドのSubBytesまで
-    SubBytes(dst, state);
 }
 
 
@@ -142,211 +159,102 @@ void FirstEncrypt(unsigned char *dst, unsigned char *src, unsigned char *init_ke
     まぁ実行速度早いからいいんだけどね
 */
 
-int Ratio_Difference_1(unsigned char *pt1, unsigned char *pt2, int a, int b) {
+int Ratio_Difference(unsigned char *pt1, unsigned char *pt2, int row1, int row2, int mode) {
     unsigned char diff[16] = {0};
 
     for (int i = 0; i < 16; i++) {
-        diff[i] = pt1[i] ^ pt2[i];  
+        diff[i] = pt1[i] ^ pt2[i];
         //ちゃんと差分が指定のモデルの位置のみに0以外の値があるかをチェック
         // printf("%02X ", diff[i]);
     }
-    // printf("\n");
+        // printf("\n");
 
-    if( gmul( diff[a], 0x09 ) == gmul( diff[b], 0x0e ) || 
-        gmul( diff[a], 0x0e ) == gmul( diff[b], 0x0b ) || 
-        gmul( diff[a], 0x0b ) == gmul( diff[b], 0x0d ) || 
-        gmul( diff[a], 0x0d ) == gmul( diff[b], 0x09 ) ){
-        return 1;
+    switch (mode) {
+        case 1:
+            return (gmul(diff[row1], 0x09) == gmul(diff[row2], 0x0e) ||
+                    gmul(diff[row1], 0x0e) == gmul(diff[row2], 0x0b) ||
+                    gmul(diff[row1], 0x0b) == gmul(diff[row2], 0x0d) ||
+                    gmul(diff[row1], 0x0d) == gmul(diff[row2], 0x09));
+        case 2:
+            return (gmul(diff[row1], 0x0d) == gmul(diff[row2], 0x09) ||
+                    gmul(diff[row1], 0x09) == gmul(diff[row2], 0x0e) ||
+                    gmul(diff[row1], 0x0e) == gmul(diff[row2], 0x0b) ||
+                    gmul(diff[row1], 0x0b) == gmul(diff[row2], 0x0d));
+        case 3:
+            return (gmul(diff[row1], 0x0b) == gmul(diff[row2], 0x0d) ||
+                    gmul(diff[row1], 0x0d) == gmul(diff[row2], 0x09) ||
+                    gmul(diff[row1], 0x09) == gmul(diff[row2], 0x0e) ||
+                    gmul(diff[row1], 0x0e) == gmul(diff[row2], 0x0b));
+        default:
+            return 0;
     }
-    return 0;   
+    return 1;
 }
 
-int Ratio_Difference_2(unsigned char *pt1, unsigned char *pt2, int b, int c) {
-    unsigned char diff[16] = {0};
-
-    for (int i = 0; i < 16; i++) {
-        diff[i] = pt1[i] ^ pt2[i];  
-        //ちゃんと差分が指定のモデルの位置のみに0以外の値があるかをチェック
-        // printf("%02X ", diff[i]);
-    }
-    // printf("\n");
-
-    if( gmul( diff[b], 0x0d ) == gmul( diff[c], 0x09 ) || 
-        gmul( diff[b], 0x09 ) == gmul( diff[c], 0x0e ) || 
-        gmul( diff[b], 0x0e ) == gmul( diff[c], 0x0b ) || 
-        gmul( diff[b], 0x0b ) == gmul( diff[c], 0x0d ) ){
-        return 1;
-    }
-    return 0;   
+/* check_key_candidates */
+int check_key_candidates(unsigned char temp_encrypted[4][16], unsigned char temp_value[4][16], unsigned char *key, int diffPositions[4], int mode) {
+    FirstEncrypt(temp_encrypted, temp_value, key);
+    return Ratio_Difference(temp_encrypted[0], temp_encrypted[1], diffPositions[mode - 1], diffPositions[mode], mode) &&
+           Ratio_Difference(temp_encrypted[2], temp_encrypted[3], diffPositions[mode - 1], diffPositions[mode], mode);
 }
 
-int Ratio_Difference_3(unsigned char *pt1, unsigned char *pt2, int c, int d) {
-    unsigned char diff[16] = {0};
+/* find_key */
+void find_key(unsigned char temp_encrypted[4][16], unsigned char temp_value[4][16], unsigned char *key, int diffPositions[4], unsigned char *mostPrimekey) {
+    for (int k_1 = 0; k_1 < 256; k_1++) {
+        key[diffPositions[0]] = (unsigned char)k_1;
+        for (int k_2 = 0; k_2 < 256; k_2++) {
+            key[diffPositions[1]] = (unsigned char)k_2;
+            if (!check_key_candidates(temp_encrypted, temp_value, key, diffPositions, MODE_1)) continue;
 
-    for (int i = 0; i < 16; i++) {
-        diff[i] = pt1[i] ^ pt2[i];  
-        //ちゃんと差分が指定のモデルの位置のみに0以外の値があるかをチェック
-        // printf("%02X ", diff[i]);
-    }
-    // printf("\n");
+            for (int k_3 = 0; k_3 < 256; k_3++) {
+                key[diffPositions[2]] = (unsigned char)k_3;
+                if (!check_key_candidates(temp_encrypted, temp_value, key, diffPositions, MODE_2)) continue;
 
-    if( gmul( diff[c], 0x0b ) == gmul( diff[d], 0x0d ) || 
-        gmul( diff[c], 0x0d ) == gmul( diff[d], 0x09 ) || 
-        gmul( diff[c], 0x09 ) == gmul( diff[d], 0x0e ) || 
-        gmul( diff[c], 0x0e ) == gmul( diff[d], 0x0b ) ){
-        return 1;
-    }
-    return 0;   
-}
+                for (int k_4 = 0; k_4 < 256; k_4++) {
+                    key[diffPositions[3]] = (unsigned char)k_4;
+                    if (!check_key_candidates(temp_encrypted, temp_value, key, diffPositions, MODE_3)) continue;
 
-
-
-//デバッグ用
-void print_target_text(unsigned char *targetText[4][4]) {
-    for (int i = 0; i < 4; i++) {
-        printf("Model %d:\n", i + 1);
-        printf("  Text 1: ");
-        for (int j = 0; j < 16; j++) {
-            printf("%02X ", targetText[i][0][j]);
-        }
-        printf("\n");
-        
-        printf("  Text 2: ");
-        for (int j = 0; j < 16; j++) {
-            printf("%02X ", targetText[i][1][j]);
-        }
-        printf("\n");
-        printf("  Text 3: ");
-
-        for (int j = 0; j < 16; j++) {
-            printf("%02X ", targetText[i][2][j]);
-        }
-
-        printf("\n");
-        printf("  Text 3: ");
-
-        for (int j = 0; j < 16; j++) {
-            printf("%02X ", targetText[i][3][j]);
-        }
-        printf("\n");
-    }
-    printf("\n");
-}
-
-int main() {
-    //SubBytes後の各値
-    unsigned char p1[16] = {};
-    unsigned char p2[16] = {};
-    unsigned char p3[16] = {};
-    unsigned char p4[16] = {};
-
-    unsigned char key[16] = {0};
-    unsigned char mostPrimekey[16] = {0}; // 見つかった鍵を入れる配列
-    int i;
-    
-    //配列[i][j] i にそれぞれのモデル　j に各モデルの平文
-    unsigned char *targetText[4][4] = {
-        {PLAIN_TEXT[0][0],PLAIN_TEXT[0][1], PLAIN_TEXT[1][0], PLAIN_TEXT[1][1]}, 
-        {PLAIN_TEXT[2][0],PLAIN_TEXT[2][1], PLAIN_TEXT[3][0],PLAIN_TEXT[3][1] },
-        {PLAIN_TEXT[4][0], PLAIN_TEXT[4][1], PLAIN_TEXT[5][0], PLAIN_TEXT[5][1]},
-        {PLAIN_TEXT[8][0], PLAIN_TEXT[8][1], PLAIN_TEXT[9][0],PLAIN_TEXT[9][1]}
-    };
-
-    // デバッグ用
-    print_target_text(targetText);
-
-    int model[4][4] = {{0, 5, 10, 15}, {3, 4, 9, 14}, {2, 7, 8, 13}, {1, 6, 11, 12}}; //モデル1 ~ 4で捜査対象のインデックス
-
-    for (int col = 0; col < 4; col++) {
-
-        //各モデルの差分が生じる部分 ex) 0 5 10 15
-        int a = model[col][0];
-        int b = model[col][1];
-        int c = model[col][2];
-        int d = model[col][3];
-
-        unsigned char *x = targetText[col][0];
-        unsigned char *y = targetText[col][1];
-        unsigned char *w = targetText[col][2];
-        unsigned char *z = targetText[col][3];
-    
-        //  x と y の内容を出力して確認 デバッグ用
-        printf("col %d:\n", col);
-        printf("  x (Text 1): ");
-        for (int j = 0; j < 16; j++) {
-            printf("%02X ", x[j]);
-        }
-        printf("\n  y (Text 2): ");
-        for (int j = 0; j < 16; j++) {
-            printf("%02X ", y[j]);
-        }
-        printf("\n\n");
-
-        // w と zもついでにデバッグ
-        printf("col %d:\n", col);
-        printf("  w (Text 1): ");
-        for (int j = 0; j < 16; j++) {
-            printf("%02X ", w[j]);
-        }
-        printf("\n  z (Text 2): ");
-        for (int j = 0; j < 16; j++) {
-            printf("%02X ", z[j]);
-        }
-        printf("\n\n");
-
-
-        for (int k_1 = 0; k_1 < 256; k_1++) {
-            for (int k_2 = 0; k_2 < 256; k_2++) {
-                key[a] = (unsigned char)k_1;
-                key[b] = (unsigned char)k_2;
-
-                FirstEncrypt(p1, x, key);
-                FirstEncrypt(p2, y, key);
-                FirstEncrypt(p3, w, key);
-                FirstEncrypt(p4, z, key);
-
-
-                if (Ratio_Difference_1(p1, p2, a, b) == 1 && Ratio_Difference_1(p3, p4, a, b) == 1) {
-                    //鍵の中間報告
-                    // printf("key_1: %02X key_2: %02X \n", (unsigned char)k_1, (unsigned char)k_2);
-                    for (int k_3 = 0; k_3 < 256; k_3++) {
-                        key[c] = (unsigned char)k_3;
-                        FirstEncrypt(p1, x, key);
-                        FirstEncrypt(p2, y, key);
-                        FirstEncrypt(p3, w, key);
-                        FirstEncrypt(p4, z, key);
-
-                        if (Ratio_Difference_2(p1, p2, b, c) == 1 && Ratio_Difference_2(p3, p4, b, c) == 1) {
-                            //鍵の中間報告
-                            // printf("key_1: %02X key_2: %02X, key_3: %02X \n", (unsigned char)k_1, (unsigned char)k_2, (unsigned char)k_3);
-
-                            for (int k_4 = 0; k_4 < 256; k_4++) {
-                                key[d] = (unsigned char)k_4;
-                                FirstEncrypt(p1, x, key);
-                                FirstEncrypt(p2, y, key);
-                                FirstEncrypt(p3, w, key);
-                                FirstEncrypt(p4, z, key);
-
-                                if (Ratio_Difference_3(p1, p2, c, d) == 1 &&  Ratio_Difference_3(p3, p4, c, d) == 1) {
-                                    //鍵の中間報告
-                                    // printf("key_1: %02X key_2: %02X, key_3: %02X  key_4: %02X \n", (unsigned char)k_1, (unsigned char)k_2, (unsigned char)k_3, (unsigned char)k_4);
-                                    mostPrimekey[a] = (unsigned char)k_1;
-                                    mostPrimekey[b] = (unsigned char)k_2;
-                                    mostPrimekey[c] = (unsigned char)k_3;
-                                    mostPrimekey[d] = (unsigned char)k_4;
-                                }
-                            }
-                        }
-                    }
-                    
-
+                    mostPrimekey[diffPositions[0]] = (unsigned char)k_1;
+                    mostPrimekey[diffPositions[1]] = (unsigned char)k_2;
+                    mostPrimekey[diffPositions[2]] = (unsigned char)k_3;
+                    mostPrimekey[diffPositions[3]] = (unsigned char)k_4;
                 }
             }
         }
     }
+}
+
+/* main */
+int main() {
+    unsigned char temp_encrypted[4][16] = {};
+    unsigned char key[16] = {0};
+    unsigned char mostPrimekey[16] = {0};
+
+    unsigned char *targetText[4][4] = {
+        {PLAIN_TEXT[0][0], PLAIN_TEXT[0][1], PLAIN_TEXT[1][0], PLAIN_TEXT[1][1]},
+        {PLAIN_TEXT[2][0], PLAIN_TEXT[2][1], PLAIN_TEXT[3][0], PLAIN_TEXT[3][1]},
+        {PLAIN_TEXT[4][0], PLAIN_TEXT[4][1], PLAIN_TEXT[5][0], PLAIN_TEXT[5][1]},
+        {PLAIN_TEXT[8][0], PLAIN_TEXT[8][1], PLAIN_TEXT[9][0], PLAIN_TEXT[9][1]}
+    };
+
+    int model[4][4] = {{0, 5, 10, 15}, {3, 4, 9, 14}, {2, 7, 8, 13}, {1, 6, 11, 12}};
+
+    for (int col = 0; col < 4; col++) {
+        int diffPositions[4];
+        for (int i = 0; i < 4; i++) {
+            diffPositions[i] = model[col][i];
+        }
+
+        unsigned char temp_value[4][16];
+        for (int i = 0; i < 4; i++) {
+            memcpy(temp_value[i], targetText[col][i], 16);
+        }
+
+        find_key(temp_encrypted, temp_value, key, diffPositions, mostPrimekey);
+    }
 
     printf("やったーーー鍵が見つかった!!!! \n0x");
-    for (i=0; i<16; i++){
+    for (int i = 0; i < 16; i++) {
         printf("%02X", mostPrimekey[i]);
     }
     printf("\n");
