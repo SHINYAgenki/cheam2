@@ -125,16 +125,14 @@ void SubBytes(unsigned char *dst, unsigned char *src) {
 }
 
 
-void FirstEncrypt(unsigned char *dst, unsigned char *src, unsigned char *init_key) {
-    unsigned char key[16];
-    unsigned char state[16]; //16bite
-    int i;
+void FirstEncrypt(unsigned char dst[4][16], unsigned char src[4][16], unsigned char *init_key) {
+    unsigned char state[4][16]; //16bite
 
-    //0ラウンドにぶち込む初期キー, 以降は鍵は使わない
-    AddRoundKey(state, src, init_key); 
+    for (int i = 0; i < 4; i++) {
+        AddRoundKey(state[i], src[i], init_key);
+        SubBytes(dst[i], state[i]);
+    }
 
-    //1ラウンドのSubBytesまで
-    SubBytes(dst, state);
 }
 
 
@@ -172,50 +170,14 @@ int Ratio_Difference(unsigned char *pt1, unsigned char *pt2, int row1, int row2,
                     gmul(diff[row1], 0x09) == gmul(diff[row2], 0x0e) ||
                     gmul(diff[row1], 0x0e) == gmul(diff[row2], 0x0b));
         default:
-            return 0; // モードが無効な場合は0を返す
+            return 0;
     }
     return 1;
 }
 
-
-//デバッグ用
-void print_target_text(unsigned char *targetText[4][4]) {
-    for (int i = 0; i < 4; i++) {
-        printf("Model %d:\n", i + 1);
-        printf("  Text 1: ");
-        for (int j = 0; j < 16; j++) {
-            printf("%02X ", targetText[i][0][j]);
-        }
-        printf("\n");
-        
-        printf("  Text 2: ");
-        for (int j = 0; j < 16; j++) {
-            printf("%02X ", targetText[i][1][j]);
-        }
-        printf("\n");
-        printf("  Text 3: ");
-
-        for (int j = 0; j < 16; j++) {
-            printf("%02X ", targetText[i][2][j]);
-        }
-
-        printf("\n");
-        printf("  Text 3: ");
-
-        for (int j = 0; j < 16; j++) {
-            printf("%02X ", targetText[i][3][j]);
-        }
-        printf("\n");
-    }
-    printf("\n");
-}
-
 int main() {
     //SubBytes後の各値
-    unsigned char p1[16] = {};
-    unsigned char p2[16] = {};
-    unsigned char p3[16] = {};
-    unsigned char p4[16] = {};
+    unsigned char temp_encrypted[4][16] = {};
 
     unsigned char key[16] = {0};
     unsigned char mostPrimekey[16] = {0}; // 見つかった鍵を入れる配列
@@ -228,9 +190,6 @@ int main() {
         {PLAIN_TEXT[4][0], PLAIN_TEXT[4][1], PLAIN_TEXT[5][0], PLAIN_TEXT[5][1]},
         {PLAIN_TEXT[8][0], PLAIN_TEXT[8][1], PLAIN_TEXT[9][0],PLAIN_TEXT[9][1]}
     };
-
-    // デバッグ用
-    print_target_text(targetText);
 
     int model[4][4] = {{0, 5, 10, 15}, {3, 4, 9, 14}, {2, 7, 8, 13}, {1, 6, 11, 12}}; //モデル1 ~ 4で捜査対象のインデックス
 
@@ -246,65 +205,34 @@ int main() {
         unsigned char *y = targetText[col][1];
         unsigned char *w = targetText[col][2];
         unsigned char *z = targetText[col][3];
-    
-        //  x と y の内容を出力して確認 デバッグ用
-        printf("col %d:\n", col);
-        printf("  x (Text 1): ");
-        for (int j = 0; j < 16; j++) {
-            printf("%02X ", x[j]);
-        }
-        printf("\n  y (Text 2): ");
-        for (int j = 0; j < 16; j++) {
-            printf("%02X ", y[j]);
-        }
-        printf("\n\n");
 
-        // w と zもついでにデバッグ
-        printf("col %d:\n", col);
-        printf("  w (Text 1): ");
-        for (int j = 0; j < 16; j++) {
-            printf("%02X ", w[j]);
+        unsigned char temp_value[4][16];
+        for (int i = 0; i < 4; i++) {
+            memcpy(temp_value[i], targetText[col][i], 16);
         }
-        printf("\n  z (Text 2): ");
-        for (int j = 0; j < 16; j++) {
-            printf("%02X ", z[j]);
-        }
-        printf("\n\n");
-
 
         for (int k_1 = 0; k_1 < 256; k_1++) {
             for (int k_2 = 0; k_2 < 256; k_2++) {
                 key[a] = (unsigned char)k_1;
                 key[b] = (unsigned char)k_2;
+                FirstEncrypt(temp_encrypted, temp_value, key);
 
-                FirstEncrypt(p1, x, key);
-                FirstEncrypt(p2, y, key);
-                FirstEncrypt(p3, w, key);
-                FirstEncrypt(p4, z, key);
-
-
-                if (Ratio_Difference(p1, p2, a, b, 1) == 1 &&Ratio_Difference(p3, p4, a, b, 1) == 1) {
+                if (Ratio_Difference(temp_encrypted[0], temp_encrypted[1], a, b, 1) == 1 &&Ratio_Difference(temp_encrypted[2],temp_encrypted[3], a, b, 1) == 1) {
                     //鍵の中間報告
                     // printf("key_1: %02X key_2: %02X \n", (unsigned char)k_1, (unsigned char)k_2);
                     for (int k_3 = 0; k_3 < 256; k_3++) {
                         key[c] = (unsigned char)k_3;
-                        FirstEncrypt(p1, x, key);
-                        FirstEncrypt(p2, y, key);
-                        FirstEncrypt(p3, w, key);
-                        FirstEncrypt(p4, z, key);
 
-                        if (Ratio_Difference(p1, p2, b, c, 2) == 1 &&Ratio_Difference(p3, p4, b, c, 2) == 1) {
+                        FirstEncrypt(temp_encrypted, temp_value, key);
+
+                        if (Ratio_Difference(temp_encrypted[0], temp_encrypted[1], b, c, 2) == 1 &&Ratio_Difference(temp_encrypted[2], temp_encrypted[3], b, c, 2) == 1) {
                             //鍵の中間報告
                             // printf("key_1: %02X key_2: %02X, key_3: %02X \n", (unsigned char)k_1, (unsigned char)k_2, (unsigned char)k_3);
 
                             for (int k_4 = 0; k_4 < 256; k_4++) {
                                 key[d] = (unsigned char)k_4;
-                                FirstEncrypt(p1, x, key);
-                                FirstEncrypt(p2, y, key);
-                                FirstEncrypt(p3, w, key);
-                                FirstEncrypt(p4, z, key);
-
-                                if (Ratio_Difference(p1, p2, c, d, 3) == 1 && Ratio_Difference(p3, p4, c, d, 3) == 1) {
+                                FirstEncrypt(temp_encrypted, temp_value, key);
+                                if (Ratio_Difference(temp_encrypted[0], temp_encrypted[1], c, d, 3) == 1 && Ratio_Difference(temp_encrypted[2], temp_encrypted[3], c, d, 3) == 1) {
                                     //鍵の中間報告
                                     // printf("key_1: %02X key_2: %02X, key_3: %02X  key_4: %02X \n", (unsigned char)k_1, (unsigned char)k_2, (unsigned char)k_3, (unsigned char)k_4);
                                     mostPrimekey[a] = (unsigned char)k_1;
