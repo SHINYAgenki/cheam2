@@ -196,49 +196,47 @@ int main() {
     for (int col = 0; col < 4; col++) {
 
         //各モデルの差分が生じる部分 ex) 0 5 10 15
-        int a = model[col][0];
-        int b = model[col][1];
-        int c = model[col][2];
-        int d = model[col][3];
+        int diffPositions[4] = {0};
 
-        unsigned char *x = targetText[col][0];
-        unsigned char *y = targetText[col][1];
-        unsigned char *w = targetText[col][2];
-        unsigned char *z = targetText[col][3];
+        for (int i = 0; i < 4; i++) { //モデルの差分が生じる部分を格納
+            diffPositions[i] = model[col][i];
+        }
 
+        //SubBytes後の値
         unsigned char temp_value[4][16];
+
         for (int i = 0; i < 4; i++) {
             memcpy(temp_value[i], targetText[col][i], 16);
         }
 
         for (int k_1 = 0; k_1 < 256; k_1++) {
             for (int k_2 = 0; k_2 < 256; k_2++) {
-                key[a] = (unsigned char)k_1;
-                key[b] = (unsigned char)k_2;
+                key[diffPositions[0]] = (unsigned char)k_1;
+                key[diffPositions[1]] = (unsigned char)k_2;
                 FirstEncrypt(temp_encrypted, temp_value, key);
 
-                if (Ratio_Difference(temp_encrypted[0], temp_encrypted[1], a, b, 1) == 1 &&Ratio_Difference(temp_encrypted[2],temp_encrypted[3], a, b, 1) == 1) {
+                if (Ratio_Difference(temp_encrypted[0], temp_encrypted[1], diffPositions[0], diffPositions[1], 1) == 1 && Ratio_Difference(temp_encrypted[2],temp_encrypted[3], diffPositions[0], diffPositions[1], 1) == 1) {
                     //鍵の中間報告
                     // printf("key_1: %02X key_2: %02X \n", (unsigned char)k_1, (unsigned char)k_2);
                     for (int k_3 = 0; k_3 < 256; k_3++) {
-                        key[c] = (unsigned char)k_3;
+                        key[diffPositions[2]] = (unsigned char)k_3;
 
                         FirstEncrypt(temp_encrypted, temp_value, key);
 
-                        if (Ratio_Difference(temp_encrypted[0], temp_encrypted[1], b, c, 2) == 1 &&Ratio_Difference(temp_encrypted[2], temp_encrypted[3], b, c, 2) == 1) {
+                        if (Ratio_Difference(temp_encrypted[0], temp_encrypted[1], diffPositions[1], diffPositions[2], 2) == 1 && Ratio_Difference(temp_encrypted[2], temp_encrypted[3], diffPositions[1], diffPositions[2], 2) == 1) {
                             //鍵の中間報告
                             // printf("key_1: %02X key_2: %02X, key_3: %02X \n", (unsigned char)k_1, (unsigned char)k_2, (unsigned char)k_3);
 
                             for (int k_4 = 0; k_4 < 256; k_4++) {
-                                key[d] = (unsigned char)k_4;
+                                key[diffPositions[3]] = (unsigned char)k_4;
                                 FirstEncrypt(temp_encrypted, temp_value, key);
-                                if (Ratio_Difference(temp_encrypted[0], temp_encrypted[1], c, d, 3) == 1 && Ratio_Difference(temp_encrypted[2], temp_encrypted[3], c, d, 3) == 1) {
+                                if (Ratio_Difference(temp_encrypted[0], temp_encrypted[1], diffPositions[2], diffPositions[3], 3) == 1 && Ratio_Difference(temp_encrypted[2], temp_encrypted[3], diffPositions[2], diffPositions[3], 3) == 1) {
                                     //鍵の中間報告
                                     // printf("key_1: %02X key_2: %02X, key_3: %02X  key_4: %02X \n", (unsigned char)k_1, (unsigned char)k_2, (unsigned char)k_3, (unsigned char)k_4);
-                                    mostPrimekey[a] = (unsigned char)k_1;
-                                    mostPrimekey[b] = (unsigned char)k_2;
-                                    mostPrimekey[c] = (unsigned char)k_3;
-                                    mostPrimekey[d] = (unsigned char)k_4;
+                                    mostPrimekey[diffPositions[0]] = (unsigned char)k_1;
+                                    mostPrimekey[diffPositions[1]] = (unsigned char)k_2;
+                                    mostPrimekey[diffPositions[2]] = (unsigned char)k_3;
+                                    mostPrimekey[diffPositions[3]] = (unsigned char)k_4;
                                 }
                             }
                         }
